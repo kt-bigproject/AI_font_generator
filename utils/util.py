@@ -9,6 +9,7 @@ import imageio
 import numpy as np
 from io import BytesIO
 from PIL import Image
+from skimage.transform import resize
 
 import matplotlib.pyplot as plt
 
@@ -134,7 +135,7 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
             )
 
         # resize
-        cropped_image = imresize(cropped_image, (resize_h, resize_w))
+        cropped_image = resize(cropped_image, (resize_h, resize_w))
         cropped_image = normalize_image(cropped_image)
         cropped_image_size = cropped_image.shape
         if verbose:
@@ -154,7 +155,7 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
             print("resize_w:", resize_w)
 
         # resize
-        cropped_image = imresize(cropped_image, (resize_h, resize_w))
+        cropped_image = resize(cropped_image, (resize_h, resize_w))
         cropped_image = normalize_image(cropped_image)
         cropped_image_size = cropped_image.shape
         if verbose:
