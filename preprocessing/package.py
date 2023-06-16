@@ -27,8 +27,8 @@ def pickle_examples(
                 print("pickle with charid")
                 for p in paths:
                     c += 1
-                    label = int(os.path.basename(p).split("_")[0])
-                    charid = int(os.path.basename(p).split("_")[1].split(".")[0])
+                    charid = int(os.path.basename(p).split("_")[0])
+                    label = int(os.path.basename(p).split("_")[1].split(".")[0])
                     with open(p, "rb") as f:
                         img_bytes = f.read()
                         example = (label, charid, img_bytes)
@@ -87,12 +87,13 @@ def pickle_interpolation_data(from_dir, save_path, char_ids, font_filter):
 
 
 if __name__ == "__main__":
-    OUTPUT_PATH = "pickle_data/"
+    OUTPUT_PATH = "./data/"
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
-    pickle_interpolation_data(
-        from_dir="dataset-2350/",
-        save_path=OUTPUT_PATH + "pickle.pkl",
-        char_ids=[i for i in range(0, 4700, 2)],
-        font_filter=[i for i in range(1, 26)],
+    pickle_examples(
+        from_dir="./data/dataset-2350",
+        train_path=os.path.join(OUTPUT_PATH, "train.obj"),
+        val_path=os.path.join(OUTPUT_PATH, "val.obj"),
+        train_val_split=0.2,
+        with_charid=True,
     )

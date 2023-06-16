@@ -42,6 +42,8 @@ def denorm_image(x):
 
 
 def read_split_image(img):
+    img = Image.open(img)
+    img = np.array(img)
     mat = img.astype(np.float32)
     side = int(mat.shape[1] / 2)
     assert side * 2 == mat.shape[1]

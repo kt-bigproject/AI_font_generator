@@ -12,14 +12,14 @@ from PIL import ImageFont
 from skimage.transform import resize
 import collections
 
-sys.path.append("../")
+sys.path.append("./")
 from utils import *
 
-SRC_PATH = "../fonts/source/"
-TRG_PATH = "../fonts/target/"
-OUTPUT_PATH = "./dataset-2350/"
-TEXT_PATH = "./2350-common-hangul.txt"
-CANVAS_SIZE = 64
+SRC_PATH = "./fonts/source/"
+TRG_PATH = "./fonts/target/"
+OUTPUT_PATH = "./data/dataset-2350/"
+TEXT_PATH = "./preprocessing/2350-common-hangul.txt"
+CANVAS_SIZE = 128
 
 
 def draw_single_char(ch, font, canvas_size):
@@ -70,12 +70,12 @@ def main():
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
     # Load source font
-    src_font = ImageFont.truetype(SRC_PATH + "source_font.ttf", CANVAS_SIZE - 8)
+    src_font = ImageFont.truetype(SRC_PATH + "source_font.ttf", CANVAS_SIZE - 16)
 
     # Load target fonts
     target_font_paths = glob.glob(TRG_PATH + "*.ttf")
     target_fonts = [
-        ImageFont.truetype(font, CANVAS_SIZE - 8) for font in target_font_paths
+        ImageFont.truetype(font, CANVAS_SIZE - 16) for font in target_font_paths
     ]
 
     # Load text
@@ -89,7 +89,7 @@ def main():
 
         src_img = np.array(src_img)
         src_img = tight_crop_image(src_img)
-        src_img = resize(src_img, (CANVAS_SIZE - 8, CANVAS_SIZE - 8))
+        src_img = resize(src_img, (CANVAS_SIZE - 16, CANVAS_SIZE - 16))
         src_img = add_padding(src_img, image_size=CANVAS_SIZE)
 
         for font_idx, font in enumerate(target_fonts):
@@ -99,7 +99,7 @@ def main():
 
             trg_img = np.array(trg_img)
             trg_img = tight_crop_image(trg_img)
-            trg_img = resize(trg_img, (CANVAS_SIZE - 8, CANVAS_SIZE - 8))
+            trg_img = resize(trg_img, (CANVAS_SIZE - 16, CANVAS_SIZE - 16))
             trg_img = add_padding(trg_img, image_size=CANVAS_SIZE)
 
             final_img = np.concatenate([trg_img, src_img], axis=1)
@@ -112,9 +112,7 @@ def main():
             final_img = final_img.astype(np.uint8)
 
             # Save the image
-            output_path = os.path.join(
-                OUTPUT_PATH, "{}_{}.png".format(idx, font_idx + 1)
-            )
+            output_path = os.path.join(OUTPUT_PATH, "{}_{}.png".format(idx, font_idx))
             Image.fromarray(final_img).save(output_path)
 
 
