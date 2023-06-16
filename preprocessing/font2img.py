@@ -19,7 +19,7 @@ SRC_PATH = "../fonts/source/"
 TRG_PATH = "../fonts/target/"
 OUTPUT_PATH = "./dataset-2350/"
 TEXT_PATH = "./2350-common-hangul.txt"
-CANVAS_SIZE = 128
+CANVAS_SIZE = 64
 
 
 def draw_single_char(ch, font, canvas_size):
@@ -32,7 +32,7 @@ def draw_single_char(ch, font, canvas_size):
     flag = np.sum(np.array(image))
 
     # 해당 font에 글자가 없으면 return None
-    if flag == 255 * 128 * 128:
+    if flag == 255 * CANVAS_SIZE * CANVAS_SIZE:
         return None
 
     return image
@@ -66,67 +66,17 @@ def draw_handwriting(ch, src_font, canvas_size, dst_folder, label, count):
     return example_img
 
 
-def create_images_from_fonts():
-    # Check if output directory exists, if not, create it
-    if not os.path.exists(OUTPUT_PATH):
-        os.makedirs(OUTPUT_PATH)
-
-    # Load the text file
-    with open(TEXT_PATH, "r", encoding="utf-8") as file:
-        chars = file.read().replace("\n", "")
-
-    # Load the source font
-    src_font_files = glob.glob(SRC_PATH + "*.*")
-    assert len(src_font_files) > 0, "No source font file found"
-    src_font = ImageFont.truetype(src_font_files[0], size=32)
-
-    # For each target font
-    for idx, trg_font_file in enumerate(glob.glob(TRG_PATH + "*.*")):
-        trg_font = ImageFont.truetype(trg_font_file, size=32)
-
-        # For each character
-        for ch in chars:
-            # Create image from source and target font
-            example_img = draw_example(ch, src_font, trg_font, CANVAS_SIZE)
-
-            # If the image is None, continue with the next character
-            if example_img is None:
-                continue
-
-            # Convert PIL Image to numpy array
-            example_np = np.array(example_img)
-
-            # Split the concatenated image into two separate images
-            img_A, img_B = read_split_image(example_np)
-
-            # Crop, resize and pad each image to 128x128
-            img_A = centering_image(
-                img_A, image_size=128, verbose=False, resize_fix=True
-            )
-            img_B = centering_image(
-                img_B, image_size=128, verbose=False, resize_fix=True
-            )
-
-            # Concatenate two images into a single image of size 128x256
-            example_np = np.concatenate([img_A, img_B], axis=1)
-
-            # Convert numpy array back to PIL Image
-            example_img = Image.fromarray(example_np.astype(np.uint8))
-
-            # Save the image
-            image_file_name = OUTPUT_PATH + "%d_%s.png" % (idx, ch)
-            example_img.save(image_file_name)
-
-
 def main():
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
     # Load source font
-    src_font = ImageFont.truetype(SRC_PATH + "source_font.ttf", CANVAS_SIZE)
+    src_font = ImageFont.truetype(SRC_PATH + "source_font.ttf", CANVAS_SIZE - 8)
 
     # Load target fonts
     target_font_paths = glob.glob(TRG_PATH + "*.ttf")
-    target_fonts = [ImageFont.truetype(font, CANVAS_SIZE) for font in target_font_paths]
+    target_fonts = [
+        ImageFont.truetype(font, CANVAS_SIZE - 8) for font in target_font_paths
+    ]
 
     # Load text
     with io.open(TEXT_PATH, "r", encoding="utf-8") as f:
@@ -139,7 +89,7 @@ def main():
 
         src_img = np.array(src_img)
         src_img = tight_crop_image(src_img)
-        src_img = resize(src_img, (CANVAS_SIZE, CANVAS_SIZE))
+        src_img = resize(src_img, (CANVAS_SIZE - 8, CANVAS_SIZE - 8))
         src_img = add_padding(src_img, image_size=CANVAS_SIZE)
 
         for font_idx, font in enumerate(target_fonts):
@@ -149,7 +99,7 @@ def main():
 
             trg_img = np.array(trg_img)
             trg_img = tight_crop_image(trg_img)
-            trg_img = resize(trg_img, (CANVAS_SIZE - 10, CANVAS_SIZE - 10))
+            trg_img = resize(trg_img, (CANVAS_SIZE - 8, CANVAS_SIZE - 8))
             trg_img = add_padding(trg_img, image_size=CANVAS_SIZE)
 
             final_img = np.concatenate([trg_img, src_img], axis=1)
