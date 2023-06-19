@@ -370,8 +370,8 @@ if __name__ == "__main__":
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
         lr=0.001,
-        log_step=500,
-        sample_step=300,
+        log_step=1000,
+        sample_step=500,
         fine_tune=False,
         flip_labels=False,
         restore=None,
@@ -379,6 +379,6 @@ if __name__ == "__main__":
         with_charid=True,
         freeze_encoder=False,
         save_nrow=8,
-        model_save_step=None,
+        model_save_step=500,
         resize_fix=90,
     )
