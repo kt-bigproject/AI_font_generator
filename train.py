@@ -64,23 +64,52 @@ class Trainer:
             L1_penalty, Lconst_penalty = 500, 1000
 
         # Get Models
-        En = Encoder()
-        De = Decoder()
-        D = Discriminator(category_num=self.fonts_num)
+        En_ST = Encoder()
+        De_ST = Decoder()
+        D_ST = Discriminator(category_num=self.fonts_num)
+
+        En_TS = Encoder()
+        De_TS = Decoder()
+        D_TS = Discriminator(category_num=self.fonts_num)
+
         if self.GPU:
-            En.cuda()
-            De.cuda()
-            D.cuda()
+            En_ST.cuda()
+            De_ST.cuda()
+            D_ST.cuda()
+
+            En_TS.cuda()
+            De_TS.cuda()
+            D_TS.cuda()
 
         # Use pre-trained Model
-        # restore에 [encoder_path, decoder_path, discriminator_path] 형태로 인자 넣기
+        # restore에 [encoder_ST_path, decoder_ST_path, discriminator_ST_path] 형태로 인자 넣기
         if restore:
-            encoder_path, decoder_path, discriminator_path = restore
-            prev_epoch = int(encoder_path.split("-")[0])
-            En.load_state_dict(torch.load(os.path.join(from_model_path, encoder_path)))
-            De.load_state_dict(torch.load(os.path.join(from_model_path, decoder_path)))
-            D.load_state_dict(
-                torch.load(os.path.join(from_model_path, discriminator_path))
+            (
+                encoder_ST_path,
+                decoder_ST_path,
+                discriminator_ST_path,
+                encoder_TS_path,
+                decoder_TS_path,
+                discriminator_TS_path,
+            ) = restore
+            prev_epoch = int(encoder_ST_path.split("-")[0])
+            En_ST.load_state_dict(
+                torch.load(os.path.join(from_model_path, encoder_ST_path))
+            )
+            De_ST.load_state_dict(
+                torch.load(os.path.join(from_model_path, decoder_ST_path))
+            )
+            D_ST.load_state_dict(
+                torch.load(os.path.join(from_model_path, discriminator_ST_path))
+            )
+            En_TS.load_state_dict(
+                torch.load(os.path.join(from_model_path, encoder_TS_path))
+            )
+            De_TS.load_state_dict(
+                torch.load(os.path.join(from_model_path, decoder_TS_path))
+            )
+            D_TS.load_state_dict(
+                torch.load(os.path.join(from_model_path, discriminator_TS_path))
             )
             print("%d epoch trained model has restored" % prev_epoch)
         else:
@@ -99,29 +128,44 @@ class Trainer:
 
         # optimizer
         if freeze_encoder:
-            G_parameters = list(De.parameters())
+            G_ST_parameters = list(De_ST.parameters())
+            G_TS_parameters = list(De_TS.parameters())
         else:
-            G_parameters = list(En.parameters()) + list(De.parameters())
-        g_optimizer = torch.optim.Adam(G_parameters, betas=(0.5, 0.999))
-        d_optimizer = torch.optim.Adam(D.parameters(), betas=(0.5, 0.999))
+            G_ST_parameters = list(En_ST.parameters()) + list(De_ST.parameters())
+            G_TS_parameters = list(En_TS.parameters()) + list(De_TS.parameters())
+        G_ST_optimizer = torch.optim.Adam(G_ST_parameters, betas=(0.5, 0.999))
+        D_ST_optimizer = torch.optim.Adam(D_ST.parameters(), betas=(0.5, 0.999))
+
+        G_TS_optimizer = torch.optim.Adam(G_TS_parameters, betas=(0.5, 0.999))
+        D_TS_optimizer = torch.optim.Adam(D_TS.parameters(), betas=(0.5, 0.999))
 
         # losses lists
-        l1_losses, const_losses, category_losses, d_losses, g_losses = (
-            list(),
-            list(),
-            list(),
-            list(),
-            list(),
-        )
+        (
+            l1_losses,
+            const_losses,
+            category_losses,
+            d_losses,
+            g_losses,
+            l1_losses_TS,
+            const_losses_TS,
+            category_losses_TS,
+            d_losses_TS,
+            g_losses_TS,
+            cycle_consistency_losses,
+        ) = ([], [], [], [], [], [], [], [], [], [], [])
 
         # training
         count = 0
         for epoch in range(max_epoch):
             if (epoch + 1) % schedule == 0:
                 updated_lr = max(lr / 2, 0.0002)
-                for param_group in d_optimizer.param_groups:
+                for param_group in D_ST_optimizer.param_groups:
                     param_group["lr"] = updated_lr
-                for param_group in g_optimizer.param_groups:
+                for param_group in G_ST_optimizer.param_groups:
+                    param_group["lr"] = updated_lr
+                for param_group in D_TS_optimizer.param_groups:
+                    param_group["lr"] = updated_lr
+                for param_group in G_TS_optimizer.param_groups:
                     param_group["lr"] = updated_lr
                 if lr != updated_lr:
                     print("decay learning rate from %.5f to %.5f" % (lr, updated_lr))
@@ -174,73 +218,148 @@ class Trainer:
                         [1, self.img_size, self.img_size]
                     )
 
-                # generate fake image form source image
+                # generate fake image form source image and for cycleGAN generate fake image from target image
                 fake_target, encoded_source, _ = Generator(
                     real_source,
-                    En,
-                    De,
+                    En_ST,
+                    De_ST,
                     self.embeddings,
                     embedding_ids,
                     GPU=self.GPU,
                     encode_layers=True,
                 )
 
-                real_TS = torch.cat([real_source, real_target], dim=1)
-                fake_TS = torch.cat([real_source, fake_target], dim=1)
+                fake_source, encoded_target, _ = Generator(
+                    real_target,
+                    En_TS,
+                    De_TS,
+                    self.embeddings,
+                    embedding_ids,
+                    GPU=self.GPU,
+                    encode_layers=True,
+                )
 
-                # Scoring with Discriminator
-                real_score, real_score_logit, real_cat_logit = D(real_TS)
-                fake_score, fake_score_logit, fake_cat_logit = D(fake_TS)
+                real = torch.cat([real_source, real_target], dim=1)
+                fake_ST = torch.cat([real_source, fake_target], dim=1)
+                fake_TS = torch.cat([fake_source, real_target], dim=1)
 
-                # Get encoded fake image to calculate constant loss
-                encoded_fake = En(fake_target)[0]
+                # Scoring with Discriminator_ST
+                real_score, real_score_logit, real_cat_logit = D_ST(real)
+                fake_score, fake_score_logit, fake_cat_logit = D_ST(fake_ST)
+
+                # Score with Discriminator_TS
+                real_score_TS, real_score_logit_TS, real_cat_logit_TS = D_TS(real)
+                fake_score_TS, fake_score_logit_TS, fake_cat_logit_TS = D_TS(fake_TS)
+
+                # Get encoded fake target image to calculate constant loss
+                encoded_fake = En_ST(fake_target)[0]
                 const_loss = Lconst_penalty * mse_criterion(
                     encoded_source, encoded_fake
+                )
+
+                # Get encoded fake source image to calculate constant loss
+                encoded_real = En_TS(fake_source)[0]
+                const_loss_TS = Lconst_penalty * mse_criterion(
+                    encoded_target, encoded_real
                 )
 
                 # category loss
                 real_category = torch.from_numpy(
                     np.eye(self.fonts_num)[embedding_ids]
                 ).float()
+
+                # category loss2
+                real_category_TS = torch.from_numpy(
+                    np.eye(self.fonts_num)[embedding_ids]
+                ).float()
+
                 if self.GPU:
                     real_category = real_category.cuda()
+                    real_category_TS = real_category_TS.cuda()
+
                 real_category_loss = bce_criterion(real_cat_logit, real_category)
                 fake_category_loss = bce_criterion(fake_cat_logit, real_category)
+
+                # category loss2 for TS real is 100
+                real_category_loss_TS = bce_criterion(
+                    real_cat_logit_TS, real_category_TS
+                )
+                fake_category_loss_TS = bce_criterion(
+                    fake_cat_logit_TS, real_category_TS
+                )
+
                 category_loss = 0.5 * (real_category_loss + fake_category_loss)
+                category_loss_TS = 0.5 * (real_category_loss_TS + fake_category_loss_TS)
 
                 # labels
                 if self.GPU:
                     one_labels = torch.ones([self.batch_size, 1]).cuda()
                     zero_labels = torch.zeros([self.batch_size, 1]).cuda()
+
+                    # category loss2 for TS real is 100
+                    one_labels_TS = torch.ones([self.batch_size, 1]).cuda()
+                    zero_labels_TS = torch.zeros([self.batch_size, 1]).cuda()
+
                 else:
                     one_labels = torch.ones([self.batch_size, 1])
                     zero_labels = torch.zeros([self.batch_size, 1])
+
+                    # category loss2 for TS real is 100
+                    one_labels_TS = torch.ones([self.batch_size, 1])
+                    zero_labels_TS = torch.zeros([self.batch_size, 1])
 
                 # binary loss - T/F
                 real_binary_loss = bce_criterion(real_score_logit, one_labels)
                 fake_binary_loss = bce_criterion(fake_score_logit, zero_labels)
                 binary_loss = real_binary_loss + fake_binary_loss
 
+                # binary loss - T/F
+                real_binary_loss_TS = bce_criterion(real_score_logit_TS, one_labels_TS)
+                fake_binary_loss_TS = bce_criterion(fake_score_logit_TS, zero_labels_TS)
+                binary_loss_TS = real_binary_loss_TS + fake_binary_loss_TS
+
                 # L1 loss between real and fake images
                 l1_loss = L1_penalty * l1_criterion(real_target, fake_target)
+                l1_loss_TS = L1_penalty * l1_criterion(real_source, fake_source)
 
                 # cheat loss for generator to fool discriminator
                 cheat_loss = bce_criterion(fake_score_logit, one_labels)
+                cheat_loss_TS = bce_criterion(fake_score_logit_TS, one_labels_TS)
+
+                # cycle consistency loss
+                cycle_consistency_loss = L1_penalty * l1_loss_TS + L1_penalty * l1_loss
 
                 # g_loss, d_loss
-                g_loss = cheat_loss + l1_loss + fake_category_loss + const_loss
+                g_loss = (
+                    cheat_loss
+                    + l1_loss
+                    + fake_category_loss
+                    + const_loss
+                    + cycle_consistency_loss
+                )
                 d_loss = binary_loss + category_loss
 
+                # g_loss, d_loss
+                g_loss_TS = (
+                    cheat_loss_TS + l1_loss_TS + fake_category_loss_TS + const_loss_TS
+                )
+                d_loss_TS = binary_loss_TS + category_loss_TS
+
                 # train Discriminator
-                D.zero_grad()
+                D_ST.zero_grad()
+                D_TS.zero_grad()
                 d_loss.backward(retain_graph=True)
-                d_optimizer.step()
+                D_ST_optimizer.step()
+                D_TS_optimizer.step()
 
                 # train Generator
-                En.zero_grad()
-                De.zero_grad()
+                En_ST.zero_grad()
+                De_ST.zero_grad()
+                En_TS.zero_grad()
+                De_TS.zero_grad()
                 g_loss.backward(retain_graph=True)
-                g_optimizer.step()
+                G_ST_optimizer.step()
+                G_TS_optimizer.step()
 
                 # loss data
                 l1_losses.append(int(l1_loss.data))
@@ -249,6 +368,15 @@ class Trainer:
                 d_losses.append(int(d_loss.data))
                 g_losses.append(int(g_loss.data))
 
+                cycle_consistency_losses.append(int(cycle_consistency_loss.data))
+
+                # loss data
+                l1_losses_TS.append(int(l1_loss_TS.data))
+                const_losses_TS.append(int(const_loss_TS.data))
+                category_losses_TS.append(int(category_loss_TS.data))
+                d_losses_TS.append(int(d_loss_TS.data))
+                g_losses_TS.append(int(g_loss_TS.data))
+
                 # logging
                 if (i + 1) % log_step == 0:
                     time_ = time.time()
@@ -256,7 +384,7 @@ class Trainer:
                         "%H:%M:%S"
                     )
                     log_format = (
-                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f"
+                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f, l1_loss_TS: %.4f, d_loss_TS: %.4f, g_loss_TS: %.4f, cycle_consistency_loss: %.4f"
                         % (
                             int(prev_epoch) + epoch + 1,
                             int(prev_epoch) + max_epoch,
@@ -265,6 +393,10 @@ class Trainer:
                             l1_loss.item(),
                             d_loss.item(),
                             g_loss.item(),
+                            l1_loss_TS.item(),
+                            d_loss_TS.item(),
+                            g_loss_TS.item(),
+                            cycle_consistency_loss.item(),
                         )
                     )
                     print(time_stamp, log_format)
@@ -273,8 +405,8 @@ class Trainer:
                 if (i + 1) % sample_step == 0:
                     fixed_fake_images = Generator(
                         self.fixed_source,
-                        En,
-                        De,
+                        En_ST,
+                        De_ST,
                         self.embeddings,
                         self.fixed_label,
                         GPU=self.GPU,
@@ -297,7 +429,7 @@ class Trainer:
                 now_date = now.strftime("%m%d")
                 now_time = now.strftime("%H:%M")
                 torch.save(
-                    En.state_dict(),
+                    En_ST.state_dict(),
                     os.path.join(
                         to_model_path,
                         "%d-%s-%s-Encoder.pkl"
@@ -305,7 +437,7 @@ class Trainer:
                     ),
                 )
                 torch.save(
-                    De.state_dict(),
+                    De_ST.state_dict(),
                     os.path.join(
                         to_model_path,
                         "%d-%s-%s-Decoder.pkl"
@@ -313,10 +445,34 @@ class Trainer:
                     ),
                 )
                 torch.save(
-                    D.state_dict(),
+                    D_ST.state_dict(),
                     os.path.join(
                         to_model_path,
                         "%d-%s-%s-Discriminator.pkl"
+                        % (int(prev_epoch) + epoch + 1, now_date, now_time),
+                    ),
+                )
+                torch.save(
+                    En_TS.state_dict(),
+                    os.path.join(
+                        to_model_path,
+                        "%d-%s-%s-Encoder_TS.pkl"
+                        % (int(prev_epoch) + epoch + 1, now_date, now_time),
+                    ),
+                ),
+                torch.save(
+                    De_TS.state_dict(),
+                    os.path.join(
+                        to_model_path,
+                        "%d-%s-%s-Decoder_TS.pkl"
+                        % (int(prev_epoch) + epoch + 1, now_date, now_time),
+                    ),
+                ),
+                torch.save(
+                    D_TS.state_dict(),
+                    os.path.join(
+                        to_model_path,
+                        "%d-%s-%s-Discriminator_TS.pkl"
                         % (int(prev_epoch) + epoch + 1, now_date, now_time),
                     ),
                 )
@@ -327,30 +483,76 @@ class Trainer:
         end_date = end.strftime("%m%d")
         end_time = end.strftime("%H:%M")
         torch.save(
-            En.state_dict(),
+            En_ST.state_dict(),
             os.path.join(
                 to_model_path,
                 "%d-%s-%s-Encoder.pkl" % (total_epoch, end_date, end_time),
             ),
         )
         torch.save(
-            De.state_dict(),
+            De_ST.state_dict(),
             os.path.join(
                 to_model_path,
                 "%d-%s-%s-Decoder.pkl" % (total_epoch, end_date, end_time),
             ),
         )
         torch.save(
-            D.state_dict(),
+            D_ST.state_dict(),
             os.path.join(
                 to_model_path,
                 "%d-%s-%s-Discriminator.pkl" % (total_epoch, end_date, end_time),
             ),
         )
-        losses = [l1_losses, const_losses, category_losses, d_losses, g_losses]
+        torch.save(
+            En_TS.state_dict(),
+            os.path.join(
+                to_model_path,
+                "%d-%s-%s-Encoder_TS.pkl" % (total_epoch, end_date, end_time),
+            ),
+        ),
+        torch.save(
+            De_TS.state_dict(),
+            os.path.join(
+                to_model_path,
+                "%d-%s-%s-Decoder_TS.pkl" % (total_epoch, end_date, end_time),
+            ),
+        ),
+        torch.save(
+            D_TS.state_dict(),
+            os.path.join(
+                to_model_path,
+                "%d-%s-%s-Discriminator_TS.pkl" % (total_epoch, end_date, end_time),
+            ),
+        )
+
+        losses = [
+            l1_losses,
+            const_losses,
+            category_losses,
+            d_losses,
+            g_losses,
+            l1_losses_TS,
+            const_losses_TS,
+            category_losses_TS,
+            d_losses_TS,
+            g_losses_TS,
+            cycle_consistency_losses,
+        ]
         torch.save(losses, os.path.join(to_model_path, "%d-losses.pkl" % total_epoch))
 
-        return l1_losses, const_losses, category_losses, d_losses, g_losses
+        return (
+            l1_losses,
+            const_losses,
+            category_losses,
+            d_losses,
+            g_losses,
+            l1_losses_TS,
+            const_losses_TS,
+            category_losses_TS,
+            d_losses_TS,
+            g_losses_TS,
+            cycle_consistency_losses,
+        )
 
 
 if __name__ == "__main__":
@@ -371,7 +573,7 @@ if __name__ == "__main__":
         to_model_path="./checkpoint",
         lr=0.001,
         log_step=500,
-        sample_step=300,
+        sample_step=500,
         fine_tune=False,
         flip_labels=False,
         restore=None,
@@ -379,6 +581,6 @@ if __name__ == "__main__":
         with_charid=True,
         freeze_encoder=False,
         save_nrow=8,
-        model_save_step=None,
+        model_save_step=500,
         resize_fix=90,
     )
