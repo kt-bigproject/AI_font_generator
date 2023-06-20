@@ -169,7 +169,7 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
 def add_padding(img, image_size=128, verbose=False, pad_value=None):
     height, width = img.shape
     if not pad_value:
-        pad_value = img[0][0]
+        pad_value = 0
     if verbose:
         print("original cropped image size:", img.shape)
 
