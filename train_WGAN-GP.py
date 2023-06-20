@@ -15,6 +15,7 @@ from model.models import Decoder, Discriminator, Encoder, Generator
 from utils import centering_image, denorm_image
 from PIL import Image
 from torchvision.utils import save_image
+import wandb
 
 
 class Trainer:
@@ -117,6 +118,8 @@ class Trainer:
             list(),
             list(),
         )
+
+        wandb.init(project="AI-font-generator")
 
         # training
         count = 0
@@ -289,6 +292,18 @@ class Trainer:
                         )
                     )
                     print(time_stamp, log_format)
+                    
+                    # log wandb
+                    wandb.log(
+                        {
+                            "epoch": int(prev_epoch) + epoch + 1,
+                            "step": i + 1,
+                            "l1_loss": l1_loss.item(),
+                            "d_loss": d_loss.item(),
+                            "g_loss": g_loss.item(),
+                        }
+                    )
+        
 
                 # save image
                 if (i + 1) % sample_step == 0:
@@ -380,7 +395,7 @@ if __name__ == "__main__":
         data_dir="./data",
         fixed_dir="./data",
         fonts_num=25,
-        batch_size=32,
+        batch_size=128,
         img_size=128,
     )
 
@@ -391,8 +406,8 @@ if __name__ == "__main__":
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
         lr=0.001,
-        log_step=1000,
-        sample_step=500,
+        log_step=100,
+        sample_step=100,
         fine_tune=False,
         flip_labels=False,
         restore=None,
@@ -400,6 +415,6 @@ if __name__ == "__main__":
         with_charid=True,
         freeze_encoder=False,
         save_nrow=8,
-        model_save_step=5,
+        model_save_step=3,
         resize_fix=90,
     )
