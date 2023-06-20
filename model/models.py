@@ -32,21 +32,26 @@ class Encoder(nn.Module):
             k_size=5,
             stride=2,
             pad=2,
-            dilation=2,
             lrelu=False,
             bn=False,
         )
         self.conv2 = conv2d(
-            conv_dim, conv_dim * 2, k_size=5, stride=2, pad=2, dilation=2
+            conv_dim, conv_dim * 2, k_size=5, stride=2, pad=2, bn=True, lrelu=True
         )
         self.conv3 = conv2d(
-            conv_dim * 2, conv_dim * 4, k_size=4, stride=2, pad=1, dilation=1
+            conv_dim * 2,
+            conv_dim * 4,
+            k_size=4,
+            stride=2,
+            pad=1,
+            bn=True,
+            lrelu=True,
         )
-        self.conv4 = conv2d(conv_dim * 4, conv_dim * 8)
-        self.conv5 = conv2d(conv_dim * 8, conv_dim * 8)
-        self.conv6 = conv2d(conv_dim * 8, conv_dim * 8)
-        self.conv7 = conv2d(conv_dim * 8, conv_dim * 8)
-        self.conv8 = conv2d(conv_dim * 8, conv_dim * 8)
+        self.conv4 = conv2d(conv_dim * 4, conv_dim * 8, bn=True, lrelu=True)
+        self.conv5 = conv2d(conv_dim * 8, conv_dim * 8, bn=True, lrelu=True)
+        self.conv6 = conv2d(conv_dim * 8, conv_dim * 8, bn=True, lrelu=True)
+        self.conv7 = conv2d(conv_dim * 8, conv_dim * 8, bn=True, lrelu=True)
+        self.conv8 = conv2d(conv_dim * 8, conv_dim * 8, bn=True, lrelu=True)
 
     def forward(self, images):
         encode_layers = dict()
@@ -83,24 +88,12 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.deconv1 = deconv2d(embedded_dim, conv_dim * 8, dropout=True)
         self.deconv2 = deconv2d(conv_dim * 16, conv_dim * 8, dropout=True, k_size=4)
-        self.deconv3 = deconv2d(
-            conv_dim * 16, conv_dim * 8, k_size=5, dilation=2, dropout=True
-        )
-        self.deconv4 = deconv2d(
-            conv_dim * 16, conv_dim * 8, k_size=4, dilation=2, stride=2
-        )
-        self.deconv5 = deconv2d(
-            conv_dim * 16, conv_dim * 4, k_size=4, dilation=2, stride=2
-        )
-        self.deconv6 = deconv2d(
-            conv_dim * 8, conv_dim * 2, k_size=4, dilation=2, stride=2
-        )
-        self.deconv7 = deconv2d(
-            conv_dim * 4, conv_dim * 1, k_size=4, dilation=2, stride=2
-        )
-        self.deconv8 = deconv2d(
-            conv_dim * 2, img_dim, k_size=4, dilation=2, stride=2, bn=False
-        )
+        self.deconv3 = deconv2d(conv_dim * 16, conv_dim * 8, k_size=5, dropout=True)
+        self.deconv4 = deconv2d(conv_dim * 16, conv_dim * 8, k_size=4, stride=2)
+        self.deconv5 = deconv2d(conv_dim * 16, conv_dim * 4, k_size=4, stride=2)
+        self.deconv6 = deconv2d(conv_dim * 8, conv_dim * 2, k_size=4, stride=2)
+        self.deconv7 = deconv2d(conv_dim * 4, conv_dim * 1, k_size=4, stride=2)
+        self.deconv8 = deconv2d(conv_dim * 2, img_dim, k_size=4, stride=2, bn=False)
 
     def forward(self, embedded, encode_layers):
         d1 = self.deconv1(embedded)
@@ -134,9 +127,9 @@ class Discriminator(nn.Module):
     def __init__(self, category_num, img_dim=2, disc_dim=64):
         super(Discriminator, self).__init__()
         self.conv1 = conv2d(img_dim, disc_dim, bn=False)
-        self.conv2 = conv2d(disc_dim, disc_dim * 2)
-        self.conv3 = conv2d(disc_dim * 2, disc_dim * 4)
-        self.conv4 = conv2d(disc_dim * 4, disc_dim * 8)
+        self.conv2 = conv2d(disc_dim, disc_dim * 2, bn=True)
+        self.conv3 = conv2d(disc_dim * 2, disc_dim * 4, bn=True)
+        self.conv4 = conv2d(disc_dim * 4, disc_dim * 8, bn=True)
         self.fc1 = fc(disc_dim * 8 * 8 * 8, 1)
         self.fc2 = fc(disc_dim * 8 * 8 * 8, category_num)
 
