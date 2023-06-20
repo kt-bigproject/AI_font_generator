@@ -1,21 +1,21 @@
 import datetime
 import glob
 import os
-import time
 import sys
+import time
 
 sys.path.append("./")
 
 import numpy as np
 import torch
 import torch.nn as nn
+import wandb
 from data_loader.data_loader import TrainDataProvider
 from model.function import init_embedding
 from model.models import Decoder, Discriminator, Encoder, Generator
-from utils import centering_image, denorm_image
 from PIL import Image
 from torchvision.utils import save_image
-import wandb
+from utils import centering_image, denorm_image
 
 
 class Trainer:
@@ -292,7 +292,7 @@ class Trainer:
                         )
                     )
                     print(time_stamp, log_format)
-                    
+
                     # log wandb
                     wandb.log(
                         {
@@ -303,7 +303,6 @@ class Trainer:
                             "g_loss": g_loss.item(),
                         }
                     )
-        
 
                 # save image
                 if (i + 1) % sample_step == 0:
