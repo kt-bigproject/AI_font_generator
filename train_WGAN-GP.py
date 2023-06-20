@@ -97,13 +97,17 @@ class Trainer:
             bce_criterion = nn.BCEWithLogitsLoss(size_average=True)
             mse_criterion = nn.MSELoss(size_average=True)
 
+        # WGAN-GP parameters
+        n_critics = 5
+        lambda_gp = 10
+
         # optimizer
         if freeze_encoder:
             G_parameters = list(De.parameters())
         else:
             G_parameters = list(En.parameters()) + list(De.parameters())
-        g_optimizer = torch.optim.Adam(G_parameters, betas=(0.5, 0.999))
-        d_optimizer = torch.optim.Adam(D.parameters(), betas=(0.5, 0.999))
+        g_optimizer = torch.optim.RMSprop(G_parameters, lr=lr)
+        d_optimizer = torch.optim.RMSprop(D.parameters(), lr=lr)
 
         # losses lists
         l1_losses, const_losses, category_losses, d_losses, g_losses = (
@@ -189,14 +193,31 @@ class Trainer:
                 fake_TS = torch.cat([real_source, fake_target], dim=1)
 
                 # Scoring with Discriminator
-                real_score, real_score_logit, real_cat_logit = D(real_TS)
-                fake_score, fake_score_logit, fake_cat_logit = D(fake_TS)
+                real_validity, real_score_logit, real_cat_logit = D(real_TS)
+                real_loss = -torch.mean(real_validity)
 
-                # Get encoded fake image to calculate constant loss
-                encoded_fake = En(fake_target)[0]
-                const_loss = Lconst_penalty * mse_criterion(
-                    encoded_source, encoded_fake
-                )
+                fake_validity, fake_score_logit, fake_cat_logit = D(fake_TS)
+                fake_loss = torch.mean(fake_validity)
+
+                # gradient penalty
+                alpha = torch.rand((self.batch_size, 1, 1, 1)).cuda()
+                interpolates = (
+                    alpha * real_TS + ((1 - alpha) * fake_TS)
+                ).requires_grad_(True)
+                d_interpolates, _, _ = D(interpolates)
+                fake = torch.ones((self.batch_size, 1)).cuda()
+                gradients = torch.autograd.grad(
+                    outputs=d_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=fake,
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True,
+                )[0]
+                gradients = gradients.view(gradients.size(0), -1)
+                gradient_penalty = (
+                    (gradients.norm(2, dim=1) - 1) ** 2
+                ).mean() * lambda_gp
 
                 # category loss
                 real_category = torch.from_numpy(
@@ -208,46 +229,46 @@ class Trainer:
                 fake_category_loss = bce_criterion(fake_cat_logit, real_category)
                 category_loss = 0.5 * (real_category_loss + fake_category_loss)
 
-                # labels
-                if self.GPU:
-                    one_labels = torch.ones([self.batch_size, 1]).cuda()
-                    zero_labels = torch.zeros([self.batch_size, 1]).cuda()
-                else:
-                    one_labels = torch.ones([self.batch_size, 1])
-                    zero_labels = torch.zeros([self.batch_size, 1])
-
-                # binary loss - T/F
-                real_binary_loss = bce_criterion(real_score_logit, one_labels)
-                fake_binary_loss = bce_criterion(fake_score_logit, zero_labels)
-                binary_loss = real_binary_loss + fake_binary_loss
-
-                # L1 loss between real and fake images
-                l1_loss = L1_penalty * l1_criterion(real_target, fake_target)
-
-                # cheat loss for generator to fool discriminator
-                cheat_loss = bce_criterion(fake_score_logit, one_labels)
-
-                # g_loss, d_loss
-                g_loss = cheat_loss + l1_loss + fake_category_loss + const_loss
-                d_loss = binary_loss + category_loss
+                d_loss = real_loss + fake_loss + gradient_penalty + category_loss
 
                 # train Discriminator
                 D.zero_grad()
                 d_loss.backward(retain_graph=True)
                 d_optimizer.step()
 
-                # train Generator
-                En.zero_grad()
-                De.zero_grad()
-                g_loss.backward(retain_graph=True)
-                g_optimizer.step()
+                if i % n_critics == 0:
+                    # train Generator
+                    En.zero_grad()
+                    De.zero_grad()
 
-                # loss data
-                l1_losses.append(int(l1_loss.data))
-                const_losses.append(int(const_loss.data))
+                    fake_validity, fake_score_logit, fake_cat_logit = D(fake_TS)
+
+                    l1_loss = L1_penalty * l1_criterion(real_target, fake_target)
+
+                    # Get encoded fake image to calculate constant loss
+                    encoded_fake = En(fake_target)[0]
+
+                    const_loss = Lconst_penalty * mse_criterion(
+                        encoded_source, encoded_fake
+                    )
+
+                    g_loss = (
+                        -torch.mean(fake_validity)
+                        + fake_category_loss
+                        + l1_loss
+                        + const_loss
+                    )
+
+                    g_loss.backward(retain_graph=True)
+                    g_optimizer.step()
+
+                    # loss data
+                    l1_losses.append(int(l1_loss.data))
+                    const_losses.append(int(const_loss.data))
+                    g_losses.append(int(g_loss.data))
+
                 category_losses.append(int(category_loss.data))
                 d_losses.append(int(d_loss.data))
-                g_losses.append(int(g_loss.data))
 
                 # logging
                 if (i + 1) % log_step == 0:
@@ -379,6 +400,6 @@ if __name__ == "__main__":
         with_charid=True,
         freeze_encoder=False,
         save_nrow=8,
-        model_save_step=500,
+        model_save_step=5,
         resize_fix=90,
     )
