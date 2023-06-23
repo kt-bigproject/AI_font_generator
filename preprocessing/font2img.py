@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
+
 import argparse
-import sys
-import glob
-import numpy as np
-import io, os
-from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
-from skimage.transform import resize
 import collections
+import glob
+import io
+import os
+import sys
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+from skimage.transform import resize
 
 sys.path.append("./")
 from utils import *

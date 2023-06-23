@@ -151,28 +151,32 @@ class Trainer:
                     [self.batch_size, 1, self.img_size, self.img_size]
                 )
 
-                # centering
-                for idx, (image_S, image_T) in enumerate(zip(real_source, real_target)):
-                    image_S = (
-                        image_S.cpu()
-                        .detach()
-                        .numpy()
-                        .reshape(self.img_size, self.img_size)
-                    )
-                    image_S = centering_image(image_S, resize_fix=90)
-                    real_source[idx] = torch.tensor(image_S).view(
-                        [1, self.img_size, self.img_size]
-                    )
-                    image_T = (
-                        image_T.cpu()
-                        .detach()
-                        .numpy()
-                        .reshape(self.img_size, self.img_size)
-                    )
-                    image_T = centering_image(image_T, resize_fix=resize_fix)
-                    real_target[idx] = torch.tensor(image_T).view(
-                        [1, self.img_size, self.img_size]
-                    )
+                # # centering
+                # for idx, (image_S, image_T) in enumerate(zip(real_source, real_target)):
+                #     image_S = (
+                #         image_S.cpu()
+                #         .detach()
+                #         .numpy()
+                #         .reshape(self.img_size, self.img_size)
+                #     )
+                #     image_S = centering_image(image_S, resize_fix=90)
+                #     # normalize
+                #     image_S = image_S / 255.0
+                #     real_source[idx] = torch.tensor(image_S).view(
+                #         [1, self.img_size, self.img_size]
+                #     )
+                #     image_T = (
+                #         image_T.cpu()
+                #         .detach()
+                #         .numpy()
+                #         .reshape(self.img_size, self.img_size)
+                #     )
+                #     image_T = centering_image(image_T, resize_fix=resize_fix)
+                #     # normalize
+                #     image_T = image_T / 255.0
+                #     real_target[idx] = torch.tensor(image_T).view(
+                #         [1, self.img_size, self.img_size]
+                #     )
 
                 # generate fake image form source image
                 fake_target, encoded_source, _ = Generator(
@@ -280,7 +284,7 @@ class Trainer:
                         GPU=self.GPU,
                     )[0]
                     save_image(
-                        denorm_image(fixed_fake_images.data),
+                        fixed_fake_images.data,
                         os.path.join(
                             save_path,
                             "fake_samples-%d-%d.png"
@@ -359,19 +363,19 @@ if __name__ == "__main__":
         data_dir="./data",
         fixed_dir="./data",
         fonts_num=25,
-        batch_size=32,
+        batch_size=128,
         img_size=128,
     )
 
     # train
     Trainer.train(
         max_epoch=30,
-        schedule=20,
+        schedule=10,
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
         lr=0.001,
-        log_step=1000,
-        sample_step=500,
+        log_step=100,
+        sample_step=100,
         fine_tune=False,
         flip_labels=False,
         restore=None,
@@ -379,6 +383,6 @@ if __name__ == "__main__":
         with_charid=True,
         freeze_encoder=False,
         save_nrow=8,
-        model_save_step=500,
+        model_save_step=3,
         resize_fix=90,
     )
