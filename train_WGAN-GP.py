@@ -60,8 +60,8 @@ class Trainer:
     ):
         # Fine Tuning coefficient
         if not fine_tune:
-            L1_penalty, Lconst_penalty = 100, 15
-            # L1_penalty, Lconst_penalty = 1, 1
+            # L1_penalty, Lconst_penalty = 100, 15
+            L1_penalty, Lconst_penalty = 1, 1
         else:
             L1_penalty, Lconst_penalty = 500, 1000
 
@@ -202,14 +202,6 @@ class Trainer:
                     encode_layers=True,
                 )
 
-                # real_soucre, real_target, fake_target의 최대 최소 출력
-                # print("real_source max : ", np.max(real_source.cpu().detach().numpy()))
-                # print("real_source min : ", np.min(real_source.cpu().detach().numpy()))
-                # print("real_target max : ", np.max(real_target.cpu().detach().numpy()))
-                # print("real_target min : ", np.min(real_target.cpu().detach().numpy()))
-                # print("fake_target max : ", np.max(fake_target.cpu().detach().numpy()))
-                # print("fake_target min : ", np.min(fake_target.cpu().detach().numpy()))
-
                 real_TS = torch.cat([real_source, real_target], dim=1)
                 fake_TS = torch.cat([real_source, fake_target], dim=1)
 
@@ -276,7 +268,9 @@ class Trainer:
                         encoded_source, encoded_fake
                     )
 
-                    g_loss = fake_category_loss + l1_loss + const_loss - fake_loss
+                    g_loss = (
+                        100 * (fake_category_loss + l1_loss + const_loss) - fake_loss
+                    )
                     # g_loss = -fake_loss
 
                     g_loss.backward(retain_graph=True)
