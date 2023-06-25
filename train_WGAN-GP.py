@@ -45,7 +45,7 @@ class Trainer:
         schedule,
         save_path,
         to_model_path,
-        lr=0.001,
+        lr=0.0002,
         log_step=100,
         sample_step=350,
         fine_tune=False,
@@ -60,8 +60,8 @@ class Trainer:
     ):
         # Fine Tuning coefficient
         if not fine_tune:
-            # L1_penalty, Lconst_penalty = 100, 15
-            L1_penalty, Lconst_penalty = 1, 1
+            L1_penalty, Lconst_penalty = 100, 15
+            # L1_penalty, Lconst_penalty = 1, 1
         else:
             L1_penalty, Lconst_penalty = 500, 1000
 
@@ -233,29 +233,31 @@ class Trainer:
                 ).mean() * lambda_gp
 
                 # category loss
-                real_category = torch.from_numpy(
-                    np.eye(self.fonts_num)[embedding_ids]
-                ).float()
-                if self.GPU:
-                    real_category = real_category.cuda()
-                real_category_loss = bce_criterion(real_cat_logit, real_category)
-                fake_category_loss = bce_criterion(fake_cat_logit, real_category)
-                # embedding_ids = torch.Tensor(embedding_ids).long().cuda()
-                # real_category_loss = ce_criterion(real_cat_logit, embedding_ids)
-                # fake_category_loss = ce_criterion(fake_cat_logit, embedding_ids)
+                # real_category = torch.from_numpy(
+                #     np.eye(self.fonts_num)[embedding_ids]
+                # ).float()
+                # if self.GPU:
+                #     real_category = real_category.cuda()
+                # real_category_loss = bce_criterion(real_cat_logit, real_category)
+                # fake_category_loss = bce_criterion(fake_cat_logit, real_category)
+                embedding_ids = torch.Tensor(embedding_ids).long().cuda()
+                real_category_loss = ce_criterion(real_cat_logit, embedding_ids)
+                fake_category_loss = ce_criterion(fake_cat_logit, embedding_ids)
                 category_loss = 0.5 * (real_category_loss + fake_category_loss)
 
                 d_loss = -real_loss + fake_loss + gradient_penalty + category_loss
 
                 # train Discriminator
-                D.zero_grad()
+                # D.zero_grad()
+                d_optimizer.zero_grad()
                 d_loss.backward(retain_graph=True)
                 d_optimizer.step()
+                g_optimizer.zero_grad()
 
                 if i % n_critics == 0:
                     # train Generator
-                    En.zero_grad()
-                    De.zero_grad()
+                    # En.zero_grad()
+                    # De.zero_grad()
 
                     # fake_validity, fake_score_logit, fake_cat_logit = D(fake_TS)
 
@@ -268,9 +270,7 @@ class Trainer:
                         encoded_source, encoded_fake
                     )
 
-                    g_loss = (
-                        100 * (fake_category_loss + l1_loss + const_loss) - fake_loss
-                    )
+                    g_loss = fake_category_loss + l1_loss + const_loss - fake_loss
                     # g_loss = -fake_loss
 
                     g_loss.backward(retain_graph=True)
@@ -291,7 +291,7 @@ class Trainer:
                         "%H:%M:%S"
                     )
                     log_format = (
-                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f, const_loss: %.4f, category_loss: %.4f, fake_loss: %.4f"
+                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f, const_loss: %.4f, category_loss: %.4f, gradient_penalty: %.4f, real_loss: %.4f, fake_loss: %.4f"
                         % (
                             int(prev_epoch) + epoch + 1,
                             int(prev_epoch) + max_epoch,
@@ -302,6 +302,8 @@ class Trainer:
                             g_loss.item(),
                             const_loss.item(),
                             category_loss.item(),
+                            gradient_penalty.item(),
+                            real_loss.item(),
                             fake_loss.item(),
                         )
                     )
@@ -315,6 +317,11 @@ class Trainer:
                             "l1_loss": l1_loss.item(),
                             "d_loss": d_loss.item(),
                             "g_loss": g_loss.item(),
+                            "const_loss": const_loss.item(),
+                            "category_loss": category_loss.item(),
+                            "gradient_penalty": gradient_penalty.item(),
+                            "real_loss": real_loss.item(),
+                            "fake_loss": fake_loss.item(),
                         }
                     )
 
@@ -408,7 +415,7 @@ if __name__ == "__main__":
         data_dir="./data",
         fixed_dir="./data",
         fonts_num=25,
-        batch_size=128,
+        batch_size=64,
         img_size=128,
     )
 
@@ -419,8 +426,8 @@ if __name__ == "__main__":
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
         lr=0.001,
-        log_step=50,
-        sample_step=50,
+        log_step=180,
+        sample_step=180,
         fine_tune=False,
         flip_labels=False,
         restore=None,
