@@ -9,6 +9,7 @@ sys.path.append("./")
 import numpy as np
 import torch
 import torch.nn as nn
+import wandb
 from data_loader.data_loader import TrainDataProvider
 from model.function import init_embedding
 from model.models import Decoder, Discriminator, Encoder, Generator
@@ -92,10 +93,14 @@ class Trainer:
             l1_criterion = nn.L1Loss(size_average=True).cuda()
             bce_criterion = nn.BCEWithLogitsLoss(size_average=True).cuda()
             mse_criterion = nn.MSELoss(size_average=True).cuda()
+            ce_criterion = nn.CrossEntropyLoss().cuda()
         else:
             l1_criterion = nn.L1Loss(size_average=True)
             bce_criterion = nn.BCEWithLogitsLoss(size_average=True)
             mse_criterion = nn.MSELoss(size_average=True)
+            ce_criterion = nn.CrossEntropyLoss()
+
+        lambda_gp = 10
 
         # optimizer
         if freeze_encoder:
@@ -114,11 +119,13 @@ class Trainer:
             list(),
         )
 
+        wandb.init(project="AI-font-generator")
+
         # training
         count = 0
         for epoch in range(max_epoch):
             if (epoch + 1) % schedule == 0:
-                updated_lr = max(lr / 2, 0.0002)
+                updated_lr = max(lr / 2, 0.0001)
                 for param_group in d_optimizer.param_groups:
                     param_group["lr"] = updated_lr
                 for param_group in g_optimizer.param_groups:
@@ -151,28 +158,28 @@ class Trainer:
                     [self.batch_size, 1, self.img_size, self.img_size]
                 )
 
-                # centering
-                for idx, (image_S, image_T) in enumerate(zip(real_source, real_target)):
-                    image_S = (
-                        image_S.cpu()
-                        .detach()
-                        .numpy()
-                        .reshape(self.img_size, self.img_size)
-                    )
-                    image_S = centering_image(image_S, resize_fix=90)
-                    real_source[idx] = torch.tensor(image_S).view(
-                        [1, self.img_size, self.img_size]
-                    )
-                    image_T = (
-                        image_T.cpu()
-                        .detach()
-                        .numpy()
-                        .reshape(self.img_size, self.img_size)
-                    )
-                    image_T = centering_image(image_T, resize_fix=resize_fix)
-                    real_target[idx] = torch.tensor(image_T).view(
-                        [1, self.img_size, self.img_size]
-                    )
+                # # centering
+                # for idx, (image_S, image_T) in enumerate(zip(real_source, real_target)):
+                #     image_S = (
+                #         image_S.cpu()
+                #         .detach()
+                #         .numpy()
+                #         .reshape(self.img_size, self.img_size)
+                #     )
+                #     image_S = centering_image(image_S, resize_fix=90)
+                #     real_source[idx] = torch.tensor(image_S).view(
+                #         [1, self.img_size, self.img_size]
+                #     )
+                #     image_T = (
+                #         image_T.cpu()
+                #         .detach()
+                #         .numpy()
+                #         .reshape(self.img_size, self.img_size)
+                #     )
+                #     image_T = centering_image(image_T, resize_fix=resize_fix)
+                #     real_target[idx] = torch.tensor(image_T).view(
+                #         [1, self.img_size, self.img_size]
+                #     )
 
                 # generate fake image form source image
                 fake_target, encoded_source, _ = Generator(
@@ -192,6 +199,26 @@ class Trainer:
                 real_score, real_score_logit, real_cat_logit = D(real_TS)
                 fake_score, fake_score_logit, fake_cat_logit = D(fake_TS)
 
+                # gradient penalty
+                alpha = torch.rand((self.batch_size, 1, 1, 1)).cuda()
+                interpolates = (
+                    alpha * real_TS + ((1 - alpha) * fake_TS)
+                ).requires_grad_(True)
+                _, d_interpolates, _ = D(interpolates)
+                fake = torch.ones((self.batch_size, 1)).cuda()
+                gradients = torch.autograd.grad(
+                    outputs=d_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=fake,
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True,
+                )[0]
+                gradients = gradients.view(gradients.size(0), -1)
+                gradient_penalty = (
+                    (gradients.norm(2, dim=1) - 1) ** 2
+                ).mean() * lambda_gp
+
                 # Get encoded fake image to calculate constant loss
                 encoded_fake = En(fake_target)[0]
                 const_loss = Lconst_penalty * mse_criterion(
@@ -199,13 +226,17 @@ class Trainer:
                 )
 
                 # category loss
-                real_category = torch.from_numpy(
-                    np.eye(self.fonts_num)[embedding_ids]
-                ).float()
-                if self.GPU:
-                    real_category = real_category.cuda()
-                real_category_loss = bce_criterion(real_cat_logit, real_category)
-                fake_category_loss = bce_criterion(fake_cat_logit, real_category)
+                # real_category = torch.from_numpy(
+                #     np.eye(self.fonts_num)[embedding_ids]
+                # ).float()
+                # if self.GPU:
+                #     real_category = real_category.cuda()
+                # real_category_loss = bce_criterion(real_cat_logit, real_category)
+                # fake_category_loss = bce_criterion(fake_cat_logit, real_category)
+
+                embedding_ids = torch.Tensor(embedding_ids).long().cuda()
+                real_category_loss = ce_criterion(real_cat_logit, embedding_ids)
+                fake_category_loss = ce_criterion(fake_cat_logit, embedding_ids)
                 category_loss = 0.5 * (real_category_loss + fake_category_loss)
 
                 # labels
@@ -229,7 +260,7 @@ class Trainer:
 
                 # g_loss, d_loss
                 g_loss = cheat_loss + l1_loss + fake_category_loss + const_loss
-                d_loss = binary_loss + category_loss
+                d_loss = binary_loss + category_loss + gradient_penalty
 
                 # train Discriminator
                 D.zero_grad()
@@ -256,7 +287,7 @@ class Trainer:
                         "%H:%M:%S"
                     )
                     log_format = (
-                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f"
+                        "Epoch [%d/%d], step [%d/%d], l1_loss: %.4f, d_loss: %.4f, g_loss: %.4f, const_loss: %.4f, category_loss: %.4f, gradient_penalty: %.4f"
                         % (
                             int(prev_epoch) + epoch + 1,
                             int(prev_epoch) + max_epoch,
@@ -265,9 +296,26 @@ class Trainer:
                             l1_loss.item(),
                             d_loss.item(),
                             g_loss.item(),
+                            const_loss.item(),
+                            category_loss.item(),
+                            gradient_penalty.item(),
                         )
                     )
                     print(time_stamp, log_format)
+
+                    # log wandb
+                    wandb.log(
+                        {
+                            "epoch": int(prev_epoch) + epoch + 1,
+                            "step": i + 1,
+                            "l1_loss": l1_loss.item(),
+                            "d_loss": d_loss.item(),
+                            "g_loss": g_loss.item(),
+                            "const_loss": const_loss.item(),
+                            "category_loss": category_loss.item(),
+                            "gradient_penalty": gradient_penalty.item(),
+                        }
+                    )
 
                 # save image
                 if (i + 1) % sample_step == 0:
@@ -280,7 +328,7 @@ class Trainer:
                         GPU=self.GPU,
                     )[0]
                     save_image(
-                        denorm_image(fixed_fake_images.data),
+                        fixed_fake_images.data,
                         os.path.join(
                             save_path,
                             "fake_samples-%d-%d.png"
@@ -359,26 +407,26 @@ if __name__ == "__main__":
         data_dir="./data",
         fixed_dir="./data",
         fonts_num=25,
-        batch_size=32,
+        batch_size=16,
         img_size=128,
     )
 
     # train
     Trainer.train(
-        max_epoch=30,
-        schedule=20,
+        max_epoch=500,
+        schedule=100,
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
-        lr=0.001,
-        log_step=1000,
-        sample_step=500,
-        fine_tune=False,
+        lr=0.0001,
+        log_step=10,
+        sample_step=10,
+        fine_tune=True,
         flip_labels=False,
-        restore=None,
-        from_model_path=False,
+        restore=["1000-Encoder.pkl", "1000-Decoder.pkl", "1000-Discriminator.pkl"],
+        from_model_path="./checkpoint",
         with_charid=True,
-        freeze_encoder=False,
-        save_nrow=8,
-        model_save_step=500,
+        freeze_encoder=True,
+        save_nrow=6,
+        model_save_step=100,
         resize_fix=90,
     )

@@ -1,0 +1,55 @@
+{
+    "os": "Linux-5.15.107+-x86_64-with-glibc2.31",
+    "python": "3.10.12",
+    "heartbeatAt": "2023-06-24T15:08:31.598154",
+    "startedAt": "2023-06-24T15:08:30.928621",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/content/drive/Othercomputers/\u1102\u1162 Mac/Active/big_project/AI_font_generator/train_GAN.py",
+    "codePath": "train_GAN.py",
+    "git": {
+        "remote": "https://github.com/kt-bigproject/AI_font_generator",
+        "commit": "aeedeb78145067bef52d85f5619ff3ede1ab9590"
+    },
+    "email": null,
+    "root": "/content/drive/Othercomputers/\u1102\u1162 Mac/Active/big_project/AI_font_generator",
+    "host": "f0ff102ada3f",
+    "username": "root",
+    "executable": "/usr/bin/python3",
+    "cpu_count": 1,
+    "cpu_count_logical": 2,
+    "cpu_freq": {
+        "current": 2000.176,
+        "min": 0.0,
+        "max": 0.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2000.176,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2000.176,
+            "min": 0.0,
+            "max": 0.0
+        }
+    ],
+    "disk": {
+        "total": 78.1898422241211,
+        "used": 25.885169982910156
+    },
+    "gpu": "Tesla T4",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "Tesla T4",
+            "memory_total": 16106127360
+        }
+    ],
+    "memory": {
+        "total": 12.678398132324219
+    }
+}

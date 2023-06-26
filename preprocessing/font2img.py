@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
+
 import argparse
-import sys
-import glob
-import numpy as np
-import io, os
-from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
-from skimage.transform import resize
 import collections
+import glob
+import io
+import os
+import sys
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+from skimage.transform import resize
 
 sys.path.append("./")
 from utils import *
@@ -55,7 +55,7 @@ def draw_example(ch, src_font, dst_font, canvas_size):
 
 
 def draw_handwriting(ch, src_font, canvas_size, dst_folder, label, count):
-    dst_path = dst_folder + "%d_%04d" % (label, count) + ".png"
+    dst_path = dst_folder + f"%d_%04d" % (label, count) + ".png"
     dst_img = Image.open(dst_path)
     src_img = draw_single_char(ch, src_font, canvas_size)
     example_img = Image.new(

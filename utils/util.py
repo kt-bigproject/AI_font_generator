@@ -30,7 +30,9 @@ def bytes_to_file(bytes_img):
 
 def normalize_image(img):
     """
-    Make image zero centered and in between (-1, 1)
+    if any element in image not between (-1, 1)
+    Make
+    image zero centered and in between (-1, 1)
     """
     normalized = (img / 127.5) - 1.0
     return normalized
@@ -106,9 +108,9 @@ def show_comparison(font_num, real_targets, fake_targets, show_num=8):
 
 def tight_crop_image(img, verbose=False, resize_fix=False):
     img_size = img.shape[0]
-    full_white = img_size
-    col_sum = np.where(full_white - np.sum(img, axis=0) > 1)
-    row_sum = np.where(full_white - np.sum(img, axis=1) > 1)
+    full_white = img_size * 255  # Updated
+    col_sum = np.where(full_white - np.sum(img, axis=0) > 0)
+    row_sum = np.where(full_white - np.sum(img, axis=1) > 0)
     y1, y2 = row_sum[0][0], row_sum[0][-1]
     x1, x2 = col_sum[0][0], col_sum[0][-1]
     cropped_image = img[y1:y2, x1:x2]
@@ -132,13 +134,11 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
             print(
                 "resize_w:",
                 resize_w,
-                "[origin_w %d / origin_h %d * target_h %d]"
-                % (origin_w, origin_h, target_h),
             )
 
         # resize
         cropped_image = resize(cropped_image, (resize_h, resize_w))
-        cropped_image = normalize_image(cropped_image)
+        # cropped_image = normalize_image(cropped_image)
         cropped_image_size = cropped_image.shape
         if verbose:
             print("resized_image size:", cropped_image_size)
@@ -158,7 +158,7 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
 
         # resize
         cropped_image = resize(cropped_image, (resize_h, resize_w))
-        cropped_image = normalize_image(cropped_image)
+        # cropped_image = normalize_image(cropped_image)
         cropped_image_size = cropped_image.shape
         if verbose:
             print("resized_image size:", cropped_image_size)
@@ -168,8 +168,7 @@ def tight_crop_image(img, verbose=False, resize_fix=False):
 
 def add_padding(img, image_size=128, verbose=False, pad_value=None):
     height, width = img.shape
-    if not pad_value:
-        pad_value = img[0][0]
+    pad_value = img[0][0]
     if verbose:
         print("original cropped image size:", img.shape)
 
@@ -203,14 +202,15 @@ def add_padding(img, image_size=128, verbose=False, pad_value=None):
     return img
 
 
-def centering_image(
-    img, image_size=128, verbose=False, resize_fix=False, pad_value=None
-):
+def centering_image(img, image_size=128, verbose=False, resize_fix=90, pad_value=None):
     if not pad_value:
         pad_value = img[0][0]
     cropped_image = tight_crop_image(img, verbose=verbose, resize_fix=resize_fix)
     centered_image = add_padding(
-        cropped_image, image_size=image_size, verbose=verbose, pad_value=pad_value
+        cropped_image,
+        image_size=image_size,
+        verbose=verbose,
+        pad_value=pad_value,
     )
 
     return centered_image

@@ -199,10 +199,12 @@ def save_fixed_sample(
             font_ids, _, batch_images = batch
         else:
             font_ids, batch_images = batch
+
         fixed_batch = batch_images.cuda()
         fixed_source = fixed_batch[:, 1, :, :].reshape(
             sample_size, 1, img_size, img_size
         )
+
         fixed_target = fixed_batch[:, 0, :, :].reshape(
             sample_size, 1, img_size, img_size
         )
@@ -210,15 +212,18 @@ def save_fixed_sample(
         # centering
         for idx, (image_S, image_T) in enumerate(zip(fixed_source, fixed_target)):
             image_S = image_S.cpu().detach().numpy().reshape(img_size, img_size)
-            image_S = np.array(list(map(round_function, image_S.flatten()))).reshape(
-                128, 128
-            )
-            image_S = centering_image(image_S, resize_fix=90)
+            # image_S = np.array(list(map(round_function, image_S.flatten()))).reshape(
+            #     128, 128
+            # )
+            image_S = np.array(list(image_S.flatten())).reshape(128, 128)
+            image_S = centering_image(image_S, resize_fix=resize_fix)
             fixed_source[idx] = torch.tensor(image_S).view([1, img_size, img_size])
+
             image_T = image_T.cpu().detach().numpy().reshape(img_size, img_size)
-            image_T = np.array(list(map(round_function, image_T.flatten()))).reshape(
-                128, 128
-            )
+            # image_T = np.array(list(map(round_function, image_T.flatten()))).reshape(
+            #     128, 128
+            # )
+            image_T = np.array(list(image_T.flatten())).reshape(128, 128)
             image_T = centering_image(image_T, resize_fix=resize_fix)
             fixed_target[idx] = torch.tensor(image_T).view([1, img_size, img_size])
 
@@ -233,6 +238,7 @@ def save_fixed_sample(
             for label, image_T in zip(fixed_label, fixed_target)
         ]
         target_with_label = sorted(target_with_label, key=lambda i: i[0])
+
         fixed_source = torch.tensor(np.array([i[1] for i in source_with_label])).cuda()
         fixed_target = torch.tensor(np.array([i[1] for i in target_with_label])).cuda()
         fixed_label = sorted(fixed_label)
