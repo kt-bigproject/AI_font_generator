@@ -125,7 +125,7 @@ class Trainer:
         count = 0
         for epoch in range(max_epoch):
             if (epoch + 1) % schedule == 0:
-                updated_lr = max(lr / 2, 0.0002)
+                updated_lr = max(lr / 2, 0.0001)
                 for param_group in d_optimizer.param_groups:
                     param_group["lr"] = updated_lr
                 for param_group in g_optimizer.param_groups:
@@ -167,8 +167,6 @@ class Trainer:
                 #         .reshape(self.img_size, self.img_size)
                 #     )
                 #     image_S = centering_image(image_S, resize_fix=90)
-                #     # normalize
-                #     image_S = image_S / 255.0
                 #     real_source[idx] = torch.tensor(image_S).view(
                 #         [1, self.img_size, self.img_size]
                 #     )
@@ -179,8 +177,6 @@ class Trainer:
                 #         .reshape(self.img_size, self.img_size)
                 #     )
                 #     image_T = centering_image(image_T, resize_fix=resize_fix)
-                #     # normalize
-                #     image_T = image_T / 255.0
                 #     real_target[idx] = torch.tensor(image_T).view(
                 #         [1, self.img_size, self.img_size]
                 #     )
@@ -417,20 +413,20 @@ if __name__ == "__main__":
 
     # train
     Trainer.train(
-        max_epoch=40,
+        max_epoch=500,
         schedule=100,
         save_path="./fixed_fake",
         to_model_path="./checkpoint",
-        lr=0.0005,
-        log_step=1468,
-        sample_step=1468,
+        lr=0.0001,
+        log_step=10,
+        sample_step=10,
         fine_tune=True,
         flip_labels=False,
-        restore=["70-Encoder.pkl", "70-Decoder.pkl", "70-Discriminator.pkl"],
+        restore=["1000-Encoder.pkl", "1000-Decoder.pkl", "1000-Discriminator.pkl"],
         from_model_path="./checkpoint",
         with_charid=True,
-        freeze_encoder=False,
-        save_nrow=8,
-        model_save_step=3,
+        freeze_encoder=True,
+        save_nrow=6,
+        model_save_step=100,
         resize_fix=90,
     )

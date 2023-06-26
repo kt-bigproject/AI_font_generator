@@ -55,7 +55,7 @@ def draw_example(ch, src_font, dst_font, canvas_size):
 
 
 def draw_handwriting(ch, src_font, canvas_size, dst_folder, label, count):
-    dst_path = dst_folder + "%d_%04d" % (label, count) + ".png"
+    dst_path = dst_folder + f"%d_%04d" % (label, count) + ".png"
     dst_img = Image.open(dst_path)
     src_img = draw_single_char(ch, src_font, canvas_size)
     example_img = Image.new(
